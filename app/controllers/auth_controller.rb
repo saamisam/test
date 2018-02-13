@@ -14,30 +14,46 @@ class AuthController < ApplicationController
         render json: {status: true,message: 'success', data:nonce1},status: :ok
     end
     
+    def validate(email)
+        check = Api.select("count(user_email) as count").where(["user_email = ? and created_at >= date_sub(NOW(), interval 1 hour)", params[:user_email]])
+        return check
+    end
+
     def create
-        # nonce = ([*("A".."Z"),*("0".."9")]-%w(0 1 I O)).sample(128).join
-        nonce = SecureRandom.hex (32)
-        key = SecureRandom.hex (16)
-        secret = SecureRandom.hex (16)
-        # challenge_code = ([*("A".."Z"),*("0".."9")]-%w(0 1 I O)).sample(8).join
-        challenge_code = SecureRandom.hex (16)
-        nonce_create = Api.new(:user_email => params[:user_email],:nonce => nonce, :challenge_code => challenge_code, :keyvalue => key, :secretvalue => secret)
-        if nonce_create.save
-            render json: {status: true,message: 'Data Saved', data:nonce_create},status: :ok
+        count = validate(params[:user_email])
+        if count.size < 10
+            # render json: {data:count},status: :ok
+            # nonce = ([*("A".."Z"),*("0".."9")]-%w(0 1 I O)).sample(128).join
+            nonce = SecureRandom.hex (32)
+            key = SecureRandom.hex (16)
+            secret = SecureRandom.hex (16)
+            # challenge_code = ([*("A".."Z"),*("0".."9")]-%w(0 1 I O)).sample(8).join
+            challenge_code = SecureRandom.hex (16)
+            nonce_create = Api.new(:user_email => params[:user_email],:nonce => nonce, :challenge_code => challenge_code, :keyvalue => key, :secretvalue => secret)
+            if nonce_create.save
+                ClientMailer.sendemail(nonce_create).deliver
+                render json: {status: true,message: 'Data Saved', data:nonce_create},status: :ok
+            else
+                render json: {status: false,message: 'Failed', data:nonce_create.errors},status: :unprocessable_entity
+            end
+        # elsif count.size > 10 ///This condition not working which doesn't returns anythin/////
         else
-            render json: {status: false,message: 'Failed', data:nonce_create.errors},status: :unprocessable_entity
+            render json: {status: false,message: 'You have exceeded maximum attempts'},status: :unprocessable_entity
         end
     end
 
     def nonce
-        keyandsecret = Api.select("user_email,keyvalue, secretvalue").where(["user_email = ? and challenge_code = ?", params[:user_email], params[:challenge_code]])
+        keyandsecret = Api.select("user_email,keyvalue, secretvalue").where(["user_email = ? and challenge_code = ? and nonce = ? and created_at >= date_sub(NOW(), interval 1 hour)    ", params[:user_email], params[:challenge_code],params[:nonce]])
         # print keyandsecret
         # data1 = Array.new
         # data1['user_email'] = keyandsecret[0]['user_email']
         # data1['token']['key'] = keyandsecret[0]['keyvalue']
         # data1['token']['secret'] = keyandsecret[0]['secretvalue']
-                
-        render json: {status: true,message: 'success', data:keyandsecret},status: :ok
+        if (keyandsecret.nil? || keyandsecret.empty?)
+            render json: {status: false,message: 'Nonce or challenge code is not valid', data:keyandsecret},status: :unprocessable_entity
+        else
+             render json: {status: true,message: 'success', data:keyandsecret},status: :ok
+        end
     end
    
     # private
@@ -56,3 +72,5 @@ end
 #print value in api
 #array issue
 #id in return
+#.nil not working without ?
+#if(keyandsecret == "") not working

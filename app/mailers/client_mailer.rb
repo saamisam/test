@@ -1,8 +1,8 @@
 class ClientMailer < ApplicationMailer
-    default from: "from@example.com"
+    # default from: "saaminathan.muralidaran@mercuryminds.com"
 
-    def sample_email(user)
+    def sendemail(user)
         @user = user
-        mail(to: @user.email, subject: 'Sample Email')
+        mail(to: @user.user_email, subject: 'Sample Email')
     end
 end
